@@ -1,0 +1,43 @@
+#!/usr/sbin/nft -f
+#
+# fips0 nftables policy — security baseline.
+#
+# Polices ONLY the fips0 mesh interface: every packet not arriving on fips0
+# returns immediately, leaving the pod's other interfaces undisturbed.
+#
+# INBOUND on fips0:  DROP everything except
+#   - replies to outbound flows we initiated (conntrack established/related)
+#   - ICMPv6 echo-request (ping6 reachability)
+#   - rules in /etc/fips/fips.d/*.nft drop-ins
+# OUTBOUND from fips0: unrestricted
+#
+# To allow a service through, drop a .nft file into /etc/fips/fips.d/ (mount
+# it in) with chain-context rules such as `tcp dport 8080 accept`.
+
+# ━━━ Idempotent table replacement ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+add table inet fips
+flush table inet fips
+
+table inet fips {
+
+    chain inbound {
+        type filter hook input priority 0; policy accept;
+
+        # Non-fips0 traffic returns immediately — chain is a no-op for
+        # anything not arriving on the fips0 mesh interface.
+        iifname != "fips0" return
+
+        # Replies to outbound flows + related ICMPv6 errors (PMTU, etc.).
+        ct state established,related accept
+
+        # ICMPv6 echo-request — ping6 reachability tests.
+        meta nfproto ipv6 icmpv6 type echo-request accept
+
+        # Operator-supplied allow rules from drop-in files.
+        include "/etc/fips/fips.d/*.nft"
+
+        # Default deny on fips0 inbound. Counter visible via
+        # `nft list table inet fips`.
+        counter drop
+    }
+}

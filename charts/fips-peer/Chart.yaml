@@ -1,0 +1,22 @@
+apiVersion: v2
+name: fips-peer
+description: |
+  A publicly reachable FIPS mesh peer node. Runs the FIPS daemon in a
+  single-replica Deployment (pod network namespace, TUN + NET_ADMIN),
+  exposes the UDP transport through a LoadBalancer, and (optionally)
+  advertises itself on Nostr so other peers can discover it.
+type: application
+version: 0.1.0
+appVersion: "0.5.2"
+kubeVersion: ">=1.28.0-0"
+home: https://fips.network
+sources:
+  - https://github.com/jmcorgan/fips
+maintainers:
+  - name: notmandatory
+keywords:
+  - fips
+  - mesh
+  - networking
+  - overlay
+  - nostr

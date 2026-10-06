@@ -1,0 +1,25 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "fips.fullname" . }}
+  labels:
+    {{- include "fips.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "fips.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  # Only the FIPS UDP transport may reach the pod. The mesh firewall (fips0)
+  # is a separate, in-pod control on top of this.
+  ingress:
+    - ports:
+        - protocol: UDP
+          port: {{ .Values.service.port }}
+  # Outbound is unrestricted: the daemon dials static peers over UDP, Nostr
+  # relays over TCP/443, and STUN servers.
+  egress:
+    - {}
+{{- end }}

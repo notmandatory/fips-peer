@@ -1,0 +1,19 @@
+{{- $cfg := deepCopy .Values.fipsConfig -}}
+{{- $node := default (dict) (get $cfg "node") -}}
+{{- $_ := set $node "identity" (dict "nsec" "__FIPS_NSEC__") -}}
+{{- $_ := set $cfg "node" $node -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "fips.fullname" . }}
+  labels:
+    {{- include "fips.labels" . | nindent 4 }}
+data:
+  fips.yaml: |
+    {{- toYaml $cfg | nindent 4 }}
+  hosts: |
+    {{- .Values.hosts | nindent 4 }}
+  {{- if .Values.meshFirewall.enabled }}
+  fips.nft: |
+    {{- .Files.Get "files/fips.nft" | nindent 4 }}
+  {{- end }}

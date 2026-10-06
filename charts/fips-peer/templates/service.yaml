@@ -1,0 +1,24 @@
+{{- if .Values.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fips.fullname" . }}
+  labels:
+    {{- include "fips.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  {{- if ne .Values.service.type "ClusterIP" }}
+  externalTrafficPolicy: {{ .Values.service.externalTrafficPolicy }}
+  {{- end }}
+  selector:
+    {{- include "fips.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: fips-udp
+      port: {{ .Values.service.port }}
+      targetPort: fips-udp
+      protocol: UDP
+{{- end }}

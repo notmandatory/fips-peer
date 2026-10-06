@@ -1,0 +1,134 @@
+# Default values for the fips-peer chart.
+
+replicaCount: 1
+
+image:
+  repository: ghcr.io/notmandatory/fips-peer
+  # Defaults to .Chart.AppVersion when empty.
+  tag: ""
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+# Node identity. The nsec is injected into fips.yaml at pod start by an init
+# container and is never written to the chart's ConfigMap.
+identity:
+  # Display only: the node's npub, shown in NOTES and the chart README.
+  npub: "npub1ven0tdvy2u8hygx0ga2p36efuefcqc6wxjmft57xlk3z5vdftc8sp3let9"
+  # Prefer an existing Secret (e.g. SOPS/SealedSecrets/ExternalSecrets).
+  existingSecret: "fips-peer-nsec"
+  # Key within the Secret holding the nsec.
+  secretKey: nsec
+  # If set and existingSecret is empty, the chart creates a Secret from it.
+  nsec: ""
+
+# Rendered verbatim into /etc/fips/fips.yaml. Any key the daemon accepts may be
+# set here. fipsConfig.node.identity is overwritten by the chart with the
+# Secret-backed key, so do not set it here.
+fipsConfig:
+  node:
+    control:
+      enabled: true
+    log_level: info
+    rendezvous:
+      nostr:
+        enabled: true
+        policy: configured_only
+        advertise: true
+        advert_relays:
+          - "wss://relay.damus.io"
+          - "wss://nos.lol"
+          - "wss://offchain.pub"
+        dm_relays:
+          - "wss://relay.damus.io"
+          - "wss://nos.lol"
+          - "wss://offchain.pub"
+  tun:
+    enabled: true
+    name: fips0
+    mtu: 1280
+  dns:
+    enabled: true
+    bind_addr: "::1"
+    port: 5354
+  transports:
+    udp:
+      bind_addr: "0.0.0.0:2121"
+      accept_connections: true
+      advertise_on_nostr: true
+      public: true
+      # The public endpoint peers should dial. Behind pfSense DNAT this must
+      # match the WAN address/port that forwards to the LoadBalancer VIP.
+      external_addr: "136.41.161.69:2121"
+  peers:
+    - npub: "npub1qmc3cvfz0yu2hx96nq3gp55zdan2qclealn7xshgr448d3nh6lks7zel98"
+      alias: "test-us01"
+      addresses:
+        - transport: udp
+          addr: "217.77.8.91:2121"
+      connect_policy: auto_connect
+    - npub: "npub10yffd020a4ag8zcy75f9pruq3rnghvvhd5hphl9s62zgp35s560qrksp9u"
+      alias: "test-us02"
+      addresses:
+        - transport: udp
+          addr: "23.182.128.74:2121"
+      connect_policy: auto_connect
+    - npub: "npub1gd7ye2qp2lphhzx75fynnjzaxx4dqanddecet0wtt5ss5ek8h9ps62wdkf"
+      alias: "test-us04"
+      addresses:
+        - transport: udp
+          addr: "74.208.245.160:2121"
+      connect_policy: auto_connect
+
+# Static hostname-to-npub mappings, rendered to /etc/fips/hosts. One
+# "hostname npub1..." entry per line.
+hosts: ""
+
+# Load the default-deny nftables baseline (files/fips.nft) on fips0 at startup.
+meshFirewall:
+  enabled: true
+
+service:
+  enabled: true
+  type: LoadBalancer
+  port: 2121
+  externalTrafficPolicy: Local
+  annotations:
+    metallb.io/loadBalancerIPs: "10.21.0.154"
+
+# Restrict pod ingress to the FIPS UDP port; allow all egress (Nostr relays,
+# STUN, and outbound UDP to peers).
+networkPolicy:
+  enabled: true
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+podAnnotations: {}
+podLabels: {}
+terminationGracePeriodSeconds: 30
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+# The daemon needs NET_ADMIN to create the fips0 TUN device, manage addresses
+# and routes, and load the nftables baseline.
+securityContext:
+  capabilities:
+    add:
+      - NET_ADMIN
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+priorityClassName: ""

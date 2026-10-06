@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fips.fullname" . }}
+  labels:
+    {{- include "fips.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  # A single FIPS identity and a single fips0 TUN device: never run two pods
+  # at once.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "fips.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "fips.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "fips.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.priorityClassName }}
+      priorityClassName: {{ . }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        # fips.yaml is rendered from the ConfigMap with a placeholder for the
+        # node secret key; this container substitutes the key from the Secret
+        # so the key never lands in the ConfigMap.
+        - name: render-config
+          image: {{ include "fips.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              sed "s|__FIPS_NSEC__|${FIPS_NSEC}|g" \
+                /config-template/fips.yaml > /etc/fips/fips.yaml
+              chmod 600 /etc/fips/fips.yaml
+              cp /config-template/hosts /etc/fips/hosts
+              {{- if .Values.meshFirewall.enabled }}
+              cp /config-template/fips.nft /etc/fips/fips.nft
+              {{- end }}
+          env:
+            - name: FIPS_NSEC
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "fips.secretName" . }}
+                  key: {{ .Values.identity.secretKey }}
+          volumeMounts:
+            - name: config-template
+              mountPath: /config-template
+            - name: config
+              mountPath: /etc/fips
+          securityContext:
+            runAsUser: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      containers:
+        - name: fips
+          image: {{ include "fips.image" . | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # ENTRYPOINT is entrypoint.sh (enables IPv6 forwarding, loads the
+          # nftables baseline); these args are forwarded to the daemon.
+          args: ["--config", "/etc/fips/fips.yaml"]
+          securityContext:
+            runAsUser: 0
+            runAsNonRoot: false
+            # NET_ADMIN creates the fips0 TUN device, manages addresses/routes,
+            # and loads the nftables baseline.
+            capabilities:
+              add:
+                {{- toYaml .Values.securityContext.capabilities.add | nindent 16 }}
+          env:
+            - name: RUST_LOG
+              value: {{ dig "node" "log_level" "info" .Values.fipsConfig | quote }}
+          ports:
+            - name: fips-udp
+              containerPort: {{ .Values.service.port }}
+              protocol: UDP
+          readinessProbe:
+            exec:
+              command: ["/usr/bin/fipsctl", "show", "status"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            exec:
+              command: ["/usr/bin/fipsctl", "show", "status"]
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: tun
+              mountPath: /dev/net/tun
+            - name: config
+              mountPath: /etc/fips
+            - name: run
+              mountPath: /run/fips
+            - name: logs
+              mountPath: /var/log/fips
+      volumes:
+        - name: tun
+          hostPath:
+            path: /dev/net/tun
+            type: CharDevice
+        - name: config
+          emptyDir: {}
+        - name: run
+          emptyDir: {}
+        - name: logs
+          emptyDir: {}
+        - name: config-template
+          configMap:
+            name: {{ include "fips.fullname" . }}

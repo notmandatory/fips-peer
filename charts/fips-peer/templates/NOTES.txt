@@ -1,0 +1,43 @@
+FIPS peer "{{ .Release.Name }}" deployed to namespace {{ .Release.Namespace }}.
+
+Node identity (npub):
+  {{ if .Values.identity.npub }}{{ .Values.identity.npub }}{{ else }}<set identity.npub>{{ end }}
+
+Check rollout status:
+
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "fips.fullname" . }}
+
+View logs:
+
+  kubectl -n {{ .Release.Namespace }} logs deploy/{{ include "fips.fullname" . }} -c fips -f
+
+Show the node's identity and peers:
+
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "fips.fullname" . }} -c fips -- fipsctl show status
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "fips.fullname" . }} -c fips -- fipsctl show peers
+
+Public endpoint peers should dial (matches transports.udp.external_addr):
+
+  {{ dig "transports" "udp" "external_addr" "<unset>" .Values.fipsConfig }}
+
+Firewall: forward the above public IP/port (UDP) to this Service:
+
+  kubectl -n {{ .Release.Namespace }} get svc {{ include "fips.fullname" . }}
+
+{{- if not (or .Values.identity.existingSecret .Values.identity.nsec) }}
+
+WARNING: no node identity is configured. Set identity.existingSecret or
+identity.nsec, or the daemon will generate an ephemeral identity on each start.
+{{- end }}
+
+{{- if not .Values.meshFirewall.enabled }}
+
+NOTE: meshFirewall is disabled; the fips0 interface has no default-deny
+baseline, so every service bound to fips0 is reachable by any mesh peer.
+{{- end }}
+
+The pod requires NET_ADMIN. If the namespace enforces the restricted Pod
+Security Standard, label it:
+
+  kubectl label namespace {{ .Release.Namespace }} \
+    pod-security.kubernetes.io/enforce=privileged --overwrite
