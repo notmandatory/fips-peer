@@ -39,6 +39,8 @@ never written to the ConfigMap.
 | `service.type` | `LoadBalancer` | Service type |
 | `service.annotations` | MetalLB VIP | e.g. `metallb.io/loadBalancerIPs` |
 | `networkPolicy.enabled` | `true` | Restrict pod ingress to UDP/2121 |
+| `hostNetwork` | `false` | Run in the node netns: bind the node IP directly, no Service/VIP |
+| `dnsPolicy` | `ClusterFirstWithHostNet` when hostNetwork | Pod DNS policy |
 
 ## Install
 
@@ -54,6 +56,24 @@ your firewall's UDP DNAT at the Service's `EXTERNAL-IP`:
 ```sh
 kubectl -n fips-peer get svc fips-peer
 ```
+
+### Alternative: hostNetwork
+
+If the LoadBalancer/VIP return path doesn't survive an external firewall (the
+peer's `msg2` arrives from an unexpected source), run the daemon in the node's
+network namespace instead:
+
+```yaml
+hostNetwork: true
+service:
+  enabled: false
+nodeSelector:
+  kubernetes.io/hostname: <node>   # pin so the node IP is stable
+```
+
+FIPS then binds `<node-ip>:2121` directly; point the firewall's DNAT at the
+**node IP** (not a VIP). Note that `NetworkPolicy` is not enforced for
+host-network pods, and the node-level firewall is what constrains access.
 
 ## Namespace Pod Security
 

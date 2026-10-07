@@ -10,6 +10,16 @@ image:
 
 imagePullSecrets: []
 
+# Run the daemon in the node's network namespace. Recommended for a publicly
+# reachable peer behind an external firewall: FIPS binds the node IP directly,
+# so the firewall DNAT can target the node IP and no Service/VIP/Cilium DNAT is
+# in the return path. Pin the pod with nodeSelector so the node IP is stable.
+# Note: NetworkPolicy is not enforced for host-network pods, and
+# service.enabled should normally be false when this is true.
+hostNetwork: false
+# Defaults to ClusterFirstWithHostNet when hostNetwork is true.
+dnsPolicy: ""
+
 nameOverride: ""
 fullnameOverride: ""
 
