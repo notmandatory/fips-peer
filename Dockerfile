@@ -7,7 +7,7 @@
 # namespace and loads the default-deny nftables baseline once fips0 exists.
 #
 # Build:
-#   podman build --build-arg FIPS_VERSION=0.5.2 -t ghcr.io/notmandatory/fips-peer:0.5.2 .
+#   podman build --build-arg FIPS_VERSION=0.5.3 -t ghcr.io/notmandatory/fips-peer:0.5.3 .
 #
 # FIPS_DEB_URL overrides the download URL entirely and FIPS_DEB_SHA256 pins
 # the artifact when set.
@@ -16,7 +16,7 @@ ARG DEBIAN_BASE=debian:trixie-slim
 FROM ${DEBIAN_BASE}
 
 ARG FIPS_REPO=jmcorgan/fips
-ARG FIPS_VERSION=0.5.2
+ARG FIPS_VERSION=0.5.3
 ARG FIPS_DEB_ARCH=amd64
 ARG FIPS_DEB_URL=
 ARG FIPS_DEB_SHA256=

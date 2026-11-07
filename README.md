@@ -23,9 +23,18 @@ This repo holds:
 
 ```sh
 podman login ghcr.io
-podman build --build-arg FIPS_VERSION=0.5.2 \
-  -t ghcr.io/notmandatory/fips-peer:0.5.2 .
-podman push ghcr.io/notmandatory/fips-peer:0.5.2
+podman build --build-arg FIPS_VERSION=0.5.3 \
+  -t ghcr.io/notmandatory/fips-peer:0.5.3 .
+podman push ghcr.io/notmandatory/fips-peer:0.5.3
+```
+
+Or use [`just`](https://github.com/casey/just), which reads the version from
+the chart's `appVersion` and tags the image with it:
+
+```sh
+just login                        # podman login ghcr.io
+just publish                      # build + push ghcr.io/notmandatory/fips-peer:<appVersion>
+FIPS_DEB_SHA256=$(just deb-sha256) just build   # build with the .deb pinned
 ```
 
 Make the `ghcr.io/notmandatory/fips-peer` package **public** (or add
